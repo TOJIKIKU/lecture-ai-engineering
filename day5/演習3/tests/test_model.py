@@ -75,8 +75,8 @@ def preprocessor():
 
 @pytest.fixture
 def train_model(sample_data, preprocessor):
-    """モデルの学習とテストデータの準備"""
-    # データの分割とラベル変換
+    """モデルの学習とテストデータの準備（過去バージョン対応版）"""
+    # データの分割
     X = sample_data.drop("Survived", axis=1)
     y = sample_data["Survived"].astype(int)
     X_train, X_test, y_train, y_test = train_test_split(
@@ -94,12 +94,29 @@ def train_model(sample_data, preprocessor):
     # モデルの学習
     model.fit(X_train, y_train)
 
-    # モデルの保存
+    # モデル保存前に過去バージョンをバックアップ
+    old_model_path = os.path.join(MODEL_DIR, "old_titanic_model.pkl")
+    
+    if os.path.exists(MODEL_PATH):
+        os.replace(MODEL_PATH, old_model_path)  # 既存モデルをold_として移動
+    
+    # 新モデルを保存
     os.makedirs(MODEL_DIR, exist_ok=True)
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
 
-    return model, X_test, y_test
+    # 過去モデルが存在する場合は読み込んで返す
+    old_model = None
+    if os.path.exists(old_model_path):
+        with open(old_model_path, "rb") as f:
+            old_model = pickle.load(f)
+
+    return {
+        "current_model": model,
+        "old_model": old_model,  # 過去モデル（存在しない場合はNone）
+        "X_test": X_test,
+        "y_test": y_test
+    }
 
 
 def test_model_exists():
@@ -108,6 +125,26 @@ def test_model_exists():
         pytest.skip("モデルファイルが存在しないためスキップします")
     assert os.path.exists(MODEL_PATH), "モデルファイルが存在しません"
 
+def test_model_comparison(train_model):
+    """過去バージョンとの性能比較テスト"""
+    result = train_model
+    
+    if result["old_model"] is None:
+        pytest.skip("過去のモデルが存在しないためスキップ")
+    
+    # 現在のモデルで予測
+    current_pred = result["current_model"].predict(result["X_test"])
+    current_accuracy = accuracy_score(result["y_test"], current_pred)
+    
+    # 過去のモデルで予測
+    old_pred = result["old_model"].predict(result["X_test"])
+    old_accuracy = accuracy_score(result["y_test"], old_pred)
+    
+    # 精度が5%以上低下していないことを確認
+    assert current_accuracy >= old_accuracy - 0.05, (
+        f"モデルの精度が5%以上低下しました: "
+        f"旧バージョン {old_accuracy:.4f} → 新バージョン {current_accuracy:.4f}"
+    )
 
 def test_model_accuracy(train_model):
     """モデルの精度を検証"""
@@ -172,29 +209,4 @@ def test_model_reproducibility(sample_data, preprocessor):
         predictions1, predictions2
     ), "モデルの予測結果に再現性がありません"
 
-    # 既存のコードの後に追加
-def test_model_comparison_with_old_version(train_model):
-    """過去のモデルバージョンと性能を比較"""
-    # 現在のモデルで予測
-    current_model, X_test, y_test = train_model
-    current_pred = current_model.predict(X_test)
-    current_accuracy = accuracy_score(y_test, current_pred)
-    
-    # 過去のモデルを読み込み（存在する場合）
-    old_model_path = os.path.join(MODEL_DIR, "old_titanic_model.pkl")
-    
-    if not os.path.exists(old_model_path):
-        pytest.skip("過去のモデルが存在しないためスキップ")
-    
-    with open(old_model_path, "rb") as f:
-        old_model = pickle.load(f)
-    
-    # 過去モデルで予測
-    old_pred = old_model.predict(X_test)
-    old_accuracy = accuracy_score(y_test, old_pred)
-    
-    # 精度が5%以上低下していないことを検証
-    assert current_accuracy >= old_accuracy - 0.05, (
-        f"モデルの精度が5%以上低下しました: "
-        f"旧バージョン {old_accuracy:.4f} → 新バージョン {current_accuracy:.4f}"
-    )
+   
