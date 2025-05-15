@@ -21,10 +21,11 @@ MIN_ACCURACY_THRESHOLD = 0.75  # 許容最低精度
 MAX_INFERENCE_TIME = 1.0  # 許容最大推論時間(秒)
 PERFORMANCE_DEGRADATION_TOLERANCE = 0.05  # 許容精度低下率
 
+
 @pytest.fixture
 def sample_data() -> pd.DataFrame:
     """テスト用データセットを読み込む
-    
+
     Returns:
         pd.DataFrame: Titanicデータセット
     """
@@ -49,7 +50,7 @@ def sample_data() -> pd.DataFrame:
 @pytest.fixture
 def preprocessor() -> ColumnTransformer:
     """前処理パイプラインを定義
-    
+
     Returns:
         ColumnTransformer: 前処理済みのデータ
     """
@@ -85,13 +86,15 @@ def preprocessor() -> ColumnTransformer:
 
 
 @pytest.fixture
-def train_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> Dict[str, Any]:
+def train_model(
+    sample_data: pd.DataFrame, preprocessor: ColumnTransformer
+) -> Dict[str, Any]:
     """モデルの学習とテストデータの準備
-    
+
     Args:
         sample_data: テスト用データセット
         preprocessor: 前処理パイプライン
-    
+
     Returns:
         Dict: モデルとテストデータを含む辞書
     """
@@ -115,10 +118,10 @@ def train_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> D
 
     # モデル保存前に過去バージョンをバックアップ
     old_model_path = os.path.join(MODEL_DIR, "old_titanic_model.pkl")
-    
+
     if os.path.exists(MODEL_PATH):
         os.replace(MODEL_PATH, old_model_path)  # 既存モデルをold_として移動
-    
+
     # 新モデルを保存
     os.makedirs(MODEL_DIR, exist_ok=True)
     with open(MODEL_PATH, "wb") as f:
@@ -136,7 +139,7 @@ def train_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> D
         "X_test": X_test,
         "y_test": y_test,
         "X_train": X_train,
-        "y_train": y_train
+        "y_train": y_train,
     }
 
 
@@ -147,23 +150,23 @@ def test_model_exists():
 
 def test_model_comparison(train_model: Dict[str, Any]):
     """過去バージョンとの性能比較テスト
-    
+
     Args:
         train_model: 学習済みモデルとテストデータ
     """
     result = train_model
-    
+
     if result["old_model"] is None:
         pytest.skip("過去のモデルが存在しないためスキップ")
-    
+
     # 現在のモデルで予測
     current_pred = result["current_model"].predict(result["X_test"])
     current_accuracy = accuracy_score(result["y_test"], current_pred)
-    
+
     # 過去のモデルで予測
     old_pred = result["old_model"].predict(result["X_test"])
     old_accuracy = accuracy_score(result["y_test"], old_pred)
-    
+
     # 精度が許容範囲内であることを確認
     assert current_accuracy >= old_accuracy - PERFORMANCE_DEGRADATION_TOLERANCE, (
         f"モデルの精度が許容範囲以上に低下しました\n"
@@ -175,7 +178,7 @@ def test_model_comparison(train_model: Dict[str, Any]):
 
 def test_model_accuracy(train_model: Dict[str, Any]):
     """モデルの精度を検証
-    
+
     Args:
         train_model: 学習済みモデルとテストデータ
     """
@@ -196,7 +199,7 @@ def test_model_accuracy(train_model: Dict[str, Any]):
 
 def test_model_inference_time(train_model: Dict[str, Any]):
     """モデルの推論時間を検証
-    
+
     Args:
         train_model: 学習済みモデルとテストデータ
     """
@@ -217,9 +220,11 @@ def test_model_inference_time(train_model: Dict[str, Any]):
     )
 
 
-def test_model_reproducibility(sample_data: pd.DataFrame, preprocessor: ColumnTransformer):
+def test_model_reproducibility(
+    sample_data: pd.DataFrame, preprocessor: ColumnTransformer
+):
     """モデルの再現性を検証
-    
+
     Args:
         sample_data: テスト用データセット
         preprocessor: 前処理パイプライン
@@ -227,9 +232,7 @@ def test_model_reproducibility(sample_data: pd.DataFrame, preprocessor: ColumnTr
     # データの分割
     X = sample_data.drop("Survived", axis=1)
     y = sample_data["Survived"].astype(int)
-    X_train, X_test, y_train, _ = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # 同じパラメータで2つのモデルを作成
     model1 = Pipeline(
@@ -255,34 +258,33 @@ def test_model_reproducibility(sample_data: pd.DataFrame, preprocessor: ColumnTr
     predictions2 = model2.predict(X_test)
 
     assert np.array_equal(predictions1, predictions2), (
-        "同じパラメータと乱数シードで学習したモデルが異なる予測結果を出力しました\n"
-        "モデルの再現性が保証されていません"
+        "同じパラメータと乱数シードで学習したモデルが異なる予測結果を出力しました\n" "モデルの再現性が保証されていません"
     )
 
 
 def test_model_feature_importance(train_model: Dict[str, Any]):
     """特徴量の重要度が適切であることを検証
-    
+
     Args:
         train_model: 学習済みモデルとテストデータ
     """
     model = train_model["current_model"]
-    
+
     # 特徴量重要度を取得
-    classifier = model.named_steps['classifier']
-    assert hasattr(classifier, 'feature_importances_'), "モデルに特徴量重要度属性がありません"
-    
+    classifier = model.named_steps["classifier"]
+    assert hasattr(classifier, "feature_importances_"), "モデルに特徴量重要度属性がありません"
+
     importances = classifier.feature_importances_
-    
+
     # 重要度が正しい形状であることを確認
-    preprocessor = model.named_steps['preprocessor']
+    preprocessor = model.named_steps["preprocessor"]
     transformed = preprocessor.transform(train_model["X_train"].iloc[:1])
     assert len(importances) == transformed.shape[1], (
         f"特徴量重要度の数が不正です\n"
         f"期待される数: {transformed.shape[1]}\n"
         f"実際の数: {len(importances)}"
     )
-    
+
     # 重要度が適切な範囲にあることを確認
     assert np.all(importances >= 0), "特徴量重要度に負の値が含まれています"
     assert np.any(importances > 0), "全ての特徴量重要度が0です"
@@ -291,19 +293,19 @@ def test_model_feature_importance(train_model: Dict[str, Any]):
 def test_data_quality(sample_data: pd.DataFrame):
     """データの品質を検証（Titanicデータセット専用に最適化）"""
     # 1. Cabin列は欠損が多いことが既知のため除外
-    checked_data = sample_data.drop(columns=['Cabin'], errors='ignore')
-    
+    checked_data = sample_data.drop(columns=["Cabin"], errors="ignore")
+
     # 2. 主要カラムの欠損値チェック
-    missing_values = checked_data[['Age', 'Embarked', 'Fare']].isnull().sum()
-    high_missing_cols = missing_values[missing_values > 0.2 * len(checked_data)]  # 閾値20%
-    
+    missing_values = checked_data[["Age", "Embarked", "Fare"]].isnull().sum()
+    high_missing_cols = missing_values[
+        missing_values > 0.2 * len(checked_data)
+    ]  # 閾値20%
+
     # 3. ターゲット変数の分布チェック
     target_dist = checked_data["Survived"].value_counts(normalize=True)
-    
+
     # 検証
-    assert len(high_missing_cols) == 0, (
-        f"欠損値が多いカラム:\n{high_missing_cols}"
-    )
-    assert 0.3 < target_dist[0] < 0.7, (
-        f"生存率の不均衡:\n生存 {target_dist[1]:.1%} 死亡 {target_dist[0]:.1%}"
-    )
+    assert len(high_missing_cols) == 0, f"欠損値が多いカラム:\n{high_missing_cols}"
+    assert (
+        0.3 < target_dist[0] < 0.7
+    ), f"生存率の不均衡:\n生存 {target_dist[1]:.1%} 死亡 {target_dist[0]:.1%}"
