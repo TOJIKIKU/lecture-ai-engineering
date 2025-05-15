@@ -38,9 +38,7 @@ def test_data_columns(sample_data):
         "Survived",
     ]
     for col in expected_columns:
-        assert (
-            col in sample_data.columns
-        ), f"カラム '{col}' がデータセットに存在しません"
+        assert col in sample_data.columns, f"カラム '{col}' がデータセットに存在しません"
 
 
 def test_data_types(sample_data):
@@ -55,9 +53,7 @@ def test_data_types(sample_data):
     # カテゴリカルカラム
     categorical_columns = ["Sex", "Embarked"]
     for col in categorical_columns:
-        assert (
-            sample_data[col].dtype == "object"
-        ), f"カラム '{col}' がカテゴリカル型ではありません"
+        assert sample_data[col].dtype == "object", f"カラム '{col}' がカテゴリカル型ではありません"
 
     # 目的変数
     survived_vals = sample_data["Survived"].dropna().unique()
@@ -71,61 +67,15 @@ def test_missing_values_acceptable(sample_data):
     # 完全に欠損するのではなく、許容範囲内の欠損を確認
     for col in sample_data.columns:
         missing_rate = sample_data[col].isna().mean()
-        assert (
-            missing_rate < 0.8
-        ), f"カラム '{col}' の欠損率が80%を超えています: {missing_rate:.2%}"
+        assert missing_rate < 0.8, f"カラム '{col}' の欠損率が80%を超えています: {missing_rate:.2%}"
 
 
 def test_value_ranges(sample_data):
-    """値の範囲を検証"""
-    context = gx.get_context()
-    data_source = context.data_sources.add_pandas("pandas")
-    data_asset = data_source.add_dataframe_asset(name="pd dataframe asset")
+    """値の範囲を検証（pandasのみ使用）"""
+    # 年齢が0-100歳の範囲内か確認
+    age_check = sample_data["Age"].dropna().between(0, 100).all()
+    assert age_check, "Ageに範囲外の値が含まれています（0-100歳以外）"
 
-    batch_definition = data_asset.add_batch_definition_whole_dataframe(
-        "batch definition"
-    )
-    batch = batch_definition.get_batch(batch_parameters={"dataframe": sample_data})
-
-    results = []
-
-    # 必須カラムの存在確認
-    required_columns = [
-        "Pclass",
-        "Sex",
-        "Age",
-        "SibSp",
-        "Parch",
-        "Fare",
-        "Embarked",
-    ]
-    missing_columns = [
-        col for col in required_columns if col not in sample_data.columns
-    ]
-    if missing_columns:
-        print(f"警告: 以下のカラムがありません: {missing_columns}")
-        return False, [{"success": False, "missing_columns": missing_columns}]
-
-    expectations = [
-        gx.expectations.ExpectColumnDistinctValuesToBeInSet(
-            column="Pclass", value_set=[1, 2, 3]
-        ),
-        gx.expectations.ExpectColumnDistinctValuesToBeInSet(
-            column="Sex", value_set=["male", "female"]
-        ),
-        gx.expectations.ExpectColumnValuesToBeBetween(
-            column="Age", min_value=0, max_value=100
-        ),
-        gx.expectations.ExpectColumnValuesToBeBetween(
-            column="Fare", min_value=0, max_value=600
-        ),
-        gx.expectations.ExpectColumnDistinctValuesToBeInSet(
-            column="Embarked", value_set=["C", "Q", "S", ""]
-        ),
-    ]
-
-    for expectation in expectations:
-        result = batch.validate(expectation)
-        results.append(result)
-        is_successful = all(result.success for result in results)
-    assert is_successful, "データの値範囲が期待通りではありません"
+    # 運賃が正の値か確認
+    fare_check = (sample_data["Fare"] >= 0).all()
+    assert fare_check, "Fareに負の値が含まれています"

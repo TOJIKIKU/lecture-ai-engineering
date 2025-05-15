@@ -1,4 +1,4 @@
-from kedro.io import MemoryDataset, KedroDataCatalog
+from kedro.io import MemoryDataset, DataCatalog
 from kedro.pipeline import Pipeline, node
 from kedro.runner import SequentialRunner
 from sklearn.model_selection import train_test_split
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         pipeline = create_pipeline()
 
         # データカタログの作成
-        catalog = KedroDataCatalog(
+        catalog = DataCatalog(
             {
                 "X_train": MemoryDataset(),
                 "X_test": MemoryDataset(),
